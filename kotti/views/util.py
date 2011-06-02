@@ -24,13 +24,17 @@ from kotti.security import get_principals
 from kotti.security import view_permitted
 from kotti.views.slots import slot_events
 
+def template_api(context, request, **kwargs):
+    return get_settings()['kotti.templates.api'][0](
+        context, request, **kwargs)
+
 class TemplateAPI(object):
     """This implements the 'api' object that's passed to all
     templates.
 
     Use dict-access as a shortcut to retrieve template macros from
-    templates.  ``api['master_view.messages']`` will return the
-    'messages' macro from the 'master_edit' template.
+    templates.  ``api['snippets.messages']`` will return the
+    'messages' macro from the 'snippets' template.
     """
     BARE_TMPL = 'kotti:templates/master-bare.pt'
 
@@ -73,7 +77,15 @@ class TemplateAPI(object):
 
     @reify
     def page_title(self):
-        return u'%s - %s' % (self.context.title, self.site_title)
+        view_title = self.request.view_name.replace('_', ' ').title()
+        if view_title:
+            view_title += u' '
+        view_title += self.context.title
+        return u'%s - %s' % (view_title, self.site_title)
+
+    @reify
+    def first_heading(self):
+        return u'<h1>%s</h1>' % self.page_title
 
     def url(self, context=None, *elements):
         if context is None:
@@ -165,16 +177,6 @@ class TemplateAPI(object):
         if format is None:
             format = self.S['kotti.time_format']
         return format_time(t, format=format, locale=self.locale_name)
-
-class TemplateAPIEdit(TemplateAPI):
-    @reify
-    def page_title(self):
-        return u'%s - %s' % (
-            self.request.view_name.replace('_', ' ').title(), self.site_title)
-
-    @reify
-    def first_heading(self):
-        return u'<h1>Edit <em>%s</em></h1>' % self.context.title
 
     def _find_edit_view(self, item):
         view_name = self.request.view_name
