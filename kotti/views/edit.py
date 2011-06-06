@@ -26,7 +26,7 @@ kotti_templates = resource_filename('kotti', 'templates/edit/widgets')
 search_path = (kotti_templates, deform_templates)
 Form.set_zpt_renderer(search_path)
 
-class NodeSchema(colander.MappingSchema):
+class ContentSchema(colander.MappingSchema):
     title = colander.SchemaNode(colander.String())
     description = colander.SchemaNode(
         colander.String(),
@@ -34,7 +34,7 @@ class NodeSchema(colander.MappingSchema):
         missing=u"",
         )
 
-class DocumentSchema(NodeSchema):
+class DocumentSchema(ContentSchema):
     body = colander.SchemaNode(
         colander.String(),
         widget=RichTextWidget(theme='advanced'),
@@ -163,13 +163,13 @@ def move_node(context, request):
         }
 
 
-def generic_edit(context, request, schema):
+def generic_edit(context, request, schema, **kwargs):
     api = template_api(context, request)
     api.first_heading=u'<h1>Edit <em>%s</em></h1>' % context.title
     api.page_title = u'Edit %s - %s' % (context.title, api.site_title)
 
     form = Form(schema, buttons=('save', 'cancel'))
-    rendered = FormController(form)(context, request)
+    rendered = FormController(form, **kwargs)(context, request)
     if is_response(rendered):
         return rendered
 
@@ -178,14 +178,14 @@ def generic_edit(context, request, schema):
         'form': rendered,
         }
 
-def generic_add(context, request, schema, factory, title):
+def generic_add(context, request, schema, add, title, **kwargs):
     api = template_api(context, request)
     api.first_heading = u'<h1>Add %s to <em>%s</em></h1>' % (
         title, context.title)
     api.page_title=u'Add %s to %s - %s' % (title, context.title, api.site_title)
 
     form = Form(schema, buttons=('save', 'cancel'))
-    rendered = FormController(form, add=factory)(context, request)
+    rendered = FormController(form, add=add, **kwargs)(context, request)
     if is_response(rendered):
         return rendered
 
@@ -194,17 +194,20 @@ def generic_add(context, request, schema, factory, title):
         'form': rendered,
         }
 
-@ensure_view_selector
-def edit_document(context, request):
-    return generic_edit(context, request, DocumentSchema())
+def make_generic_edit(schema, **kwargs):
+    @ensure_view_selector
+    def view(context, request):
+        return generic_edit(context, request, schema, **kwargs)
+    return view
 
-def add_document(context, request):
-    return generic_add(
-        context, request, DocumentSchema(), Document, u'document')
+def make_generic_add(schema, add, title, **kwargs):
+    def view(context, request):
+        return generic_add(context, request, schema, add, title, **kwargs)
+    return view
 
 def includeme(config):
     config.add_view(
-        edit_document,
+        make_generic_edit(DocumentSchema()),
         context=Document,
         name='edit',
         permission='edit',
@@ -212,7 +215,7 @@ def includeme(config):
         )
 
     config.add_view(
-        add_document,
+        make_generic_add(DocumentSchema(), Document, u'document'),
         name=Document.type_info.add_view,
         permission='add',
         renderer='../templates/edit/node.pt',
